@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KAIRON // CORE 2099 (REAL GLTF 3D ENGINE)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Orbitron:wght@700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+  <!-- Three.js + GLTFLoader + DRACOLoader + RGBELoader + UnrealBloom -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body { background: #020408; color: #f8fafc; font-family: 'Rajdhani', sans-serif; overflow: hidden; height: 100vh; width: 100vw; }
+    #gameCanvas { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 1; }
+
+    .vignette {
+      position: fixed; inset: 0; z-index: 2; pointer-events: none;
+      background: radial-gradient(circle at center, transparent 55%, rgba(0, 0, 0, 0.85) 100%);
+      transition: box-shadow 0.3s;
+    }
+    .vignette.rage { box-shadow: inset 0 0 120px rgba(245, 158, 11, 0.8), inset 0 0 50px rgba(225, 29, 72, 0.7); }
+    .vignette.danger { box-shadow: inset 0 0 100px rgba(239, 68, 68, 0.85); }
+
+    /* ==========================================
+       3D ASSET STREAMING LOADER & START SCREEN
+       ========================================== */
+    .start-screen, .end-screen {
+      position: fixed; inset: 0; z-index: 60;
+      background: radial-gradient(circle at center, rgba(10, 18, 36, 0.88) 0%, rgba(2, 4, 9, 0.98) 100%);
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      backdrop-filter: blur(18px); text-align: center;
+    }
+    .end-screen { z-index: 70; background: radial-gradient(circle at center, rgba(16, 24, 48, 0.92) 0%, rgba(2, 4, 9, 0.99) 100%); }
+    .engine-badge {
+      border: 1px solid #38bdf8; background: rgba(56, 189, 248, 0.12); color: #38bdf8;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; padding: 6px 18px;
+      letter-spacing: 3px; border-radius: 30px; margin-bottom: 16px;
+    }
+    .main-title {
+      font-family: 'Orbitron', sans-serif; font-size: 5rem; font-weight: 900;
+      letter-spacing: 14px; color: #fff;
+      text-shadow: 0 0 40px rgba(56, 189, 248, 0.6), 0 10px 30px #000;
+    }
+    .sub-title { font-size: 1.15rem; letter-spacing: 7px; color: #94a3b8; margin: 8px 0 32px; font-weight: 700; }
+    .load-wrap { width: 340px; height: 8px; background: #0f172a; border: 1px solid #334155; border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+    #loadBar { width: 5%; height: 100%; background: linear-gradient(90deg, #38bdf8, #10b981); transition: width 0.25s; }
+    #loadStatus { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: #38bdf8; margin-bottom: 28px; }
+    .btn-launch {
+      background: linear-gradient(135deg, #0284c7, #10b981); color: #020617;
+      border: none; padding: 16px 48px; font-family: 'Orbitron', sans-serif;
+      font-size: 0.95rem; font-weight: 900; letter-spacing: 3px; border-radius: 4px;
+      cursor: pointer; box-shadow: 0 0 35px rgba(56, 189, 248, 0.5); transition: 0.25s;
+    }
+    .btn-launch:disabled { opacity: 0.35; cursor: wait; }
+    .btn-launch:not(:disabled):hover { transform: scale(1.05); box-shadow: 0 0 50px rgba(16, 185, 129, 0.9); }
+
+    /* ==========================================
+       CINEMATIC CUTSCENE BARS
+       ========================================== */
+    .cinematic-ui {
+      position: fixed; inset: 0; z-index: 40; pointer-events: none;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .cine-bar-top, .cine-bar-bot {
+      width: 100%; height: 12vh; background: #000;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 48px; border-color: rgba(56, 189, 248, 0.25);
+    }
+    .cine-bar-top { border-bottom: 1px solid rgba(56, 189, 248, 0.25); }
+    .cine-bar-bot { height: 16vh; border-top: 1px solid rgba(56, 189, 248, 0.25); flex-direction: column; justify-content: center; gap: 8px; }
+    .cine-tag { font-family: 'JetBrains Mono', monospace; color: #38bdf8; font-size: 0.8rem; letter-spacing: 3px; }
+    .cine-sub { font-size: 1.3rem; font-weight: 600; color: #f8fafc; max-width: 900px; text-align: center; }
+    .btn-skip {
+      pointer-events: auto; background: rgba(56, 189, 248, 0.15); color: #38bdf8;
+      border: 1px solid #38bdf8; padding: 8px 22px; font-family: 'Orbitron', sans-serif;
+      font-size: 0.75rem; font-weight: 800; letter-spacing: 2px; cursor: pointer;
+    }
+
+    /* ==========================================
+       AAA TACTICAL HUD
+       ========================================== */
+    .game-hud {
+      position: fixed; inset: 0; z-index: 10; pointer-events: none;
+      display: flex; flex-direction: column; justify-content: space-between; padding: 24px 32px;
+    }
+    .hud-top { display: flex; justify-content: space-between; align-items: flex-start; }
+    .boss-panel {
+      background: rgba(15, 6, 10, 0.82); backdrop-filter: blur(12px);
+      border: 1px solid rgba(244, 63, 94, 0.4); border-top: 3px solid #f43f5e;
+      padding: 12px 32px; border-radius: 6px; text-align: center; min-width: 440px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.75);
+    }
+    .boss-name { font-family: 'Orbitron', sans-serif; font-size: 0.9rem; color: #fb7185; letter-spacing: 3px; font-weight: 900; }
+    .boss-bar { width: 100%; height: 10px; background: rgba(255,255,255,0.08); margin-top: 8px; border-radius: 3px; overflow: hidden; }
+    #bossHpFill { width: 100%; height: 100%; background: linear-gradient(90deg, #e11d48, #f97316); box-shadow: 0 0 14px #f43f5e; transition: 0.12s; }
+    .boss-sub { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: #fde047; margin-top: 6px; }
+
+    .combo-box { text-align: right; font-family: 'Orbitron', sans-serif; text-shadow: 0 0 20px rgba(56, 189, 248, 0.8); }
+    .combo-num { font-size: 3.2rem; font-weight: 900; color: #38bdf8; line-height: 1; }
+    .combo-label { font-size: 0.75rem; letter-spacing: 3px; color: #fbbf24; }
+
+    .reticle {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 24px; height: 24px; border: 1.5px solid rgba(56, 189, 248, 0.75);
+      border-radius: 50%; z-index: 8; pointer-events: none;
+    }
+    .reticle::after {
+      content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 4px; height: 4px; background: #fbbf24; border-radius: 50%;
+    }
+    .floating-prompts {
+      position: fixed; top: 64%; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 15; pointer-events: none;
+    }
+    .prompt-pill {
+      background: rgba(9, 14, 26, 0.9); backdrop-filter: blur(10px);
+      border: 1px solid #38bdf8; color: #fff; padding: 8px 22px; border-radius: 4px;
+      font-family: 'Orbitron', sans-serif; font-size: 0.8rem; font-weight: 800; letter-spacing: 2px;
+    }
+    .prompt-pill.execute {
+      border: 2px solid #f59e0b; color: #fef3c7;
+      background: linear-gradient(90deg, rgba(180, 83, 9, 0.9), rgba(225, 29, 72, 0.9));
+      box-shadow: 0 0 25px rgba(245, 158, 11, 0.7);
+    }
+    .prompt-pill.duel {
+      border: 2px solid #f43f5e; color: #ffe4e6;
+      background: linear-gradient(90deg, rgba(190, 18, 60, 0.9), rgba(124, 45, 18, 0.9));
+      box-shadow: 0 0 25px rgba(244, 63, 94, 0.8);
+    }
+
+    .hud-bottom { display: flex; justify-content: space-between; align-items: flex-end; }
+    .left-cluster { display: flex; align-items: flex-end; gap: 18px; }
+    .gta-radar {
+      width: 155px; height: 155px; background: rgba(6, 12, 24, 0.88);
+      backdrop-filter: blur(12px); border: 2px solid #38bdf8; border-radius: 50%;
+      position: relative; overflow: hidden; box-shadow: 0 0 25px rgba(0,0,0,0.85);
+    }
+    #radarKairon { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; background: #38bdf8; border: 2px solid #fff; border-radius: 50%; transform: translate(-50%, -50%); z-index: 3; }
+    #radarCar { position: absolute; width: 7px; height: 7px; background: #10b981; transform: translate(-50%, -50%); z-index: 2; }
+    #radarBoss { position: absolute; width: 10px; height: 10px; background: #f43f5e; border-radius: 50%; transform: translate(-50%, -50%); z-index: 2; box-shadow: 0 0 10px #f43f5e; }
+
+    .gow-bars {
+      background: rgba(8, 15, 30, 0.8); backdrop-filter: blur(12px);
+      border-left: 4px solid #38bdf8; padding: 14px 20px; border-radius: 0 6px 6px 0;
+      min-width: 270px; box-shadow: 0 10px 30px rgba(0,0,0,0.65);
+    }
+    .kairon-title { font-family: 'Orbitron', sans-serif; font-size: 0.95rem; font-weight: 900; color: #fff; letter-spacing: 2px; display: flex; justify-content: space-between; }
+    .mode-tag { color: #10b981; font-size: 0.7rem; }
+    .bar-group { margin-top: 8px; display: flex; flex-direction: column; gap: 7px; }
+    .b-label { font-size: 0.68rem; letter-spacing: 1.5px; color: #94a3b8; display: flex; justify-content: space-between; }
+    .b-track { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+    #hpFill { width: 100%; height: 100%; background: linear-gradient(90deg, #10b981, #34d399); transition: 0.2s; }
+    #rageFill { width: 100%; height: 100%; background: linear-gradient(90deg, #d97706, #fbbf24); transition: 0.2s; }
+    #coreFill { width: 0%; height: 100%; background: linear-gradient(90deg, #0284c7, #38bdf8); transition: 0.4s; }
+
+    .controls-card {
+      background: rgba(8, 15, 30, 0.78); backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.25); padding: 12px 18px; border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.73rem; line-height: 1.75; color: #cbd5e1;
+    }
+    .k { background: rgba(56, 189, 248, 0.2); border: 1px solid #38bdf8; color: #38bdf8; padding: 1px 6px; border-radius: 3px; font-weight: 700; }
+
+    /* ==========================================
+       MULTI-LANGUAGE HACK TERMINAL MODAL
+       ========================================== */
+    .code-modal {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 740px; max-width: 94vw; background: rgba(6, 11, 22, 0.96);
+      backdrop-filter: blur(24px); border: 2px solid #38bdf8; border-radius: 8px;
+      padding: 26px; z-index: 50; box-shadow: 0 25px 70px rgba(0,0,0,0.95);
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .hidden { display: none !important; }
+    .modal-top { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(56,189,248,0.25); padding-bottom: 12px; }
+    .lang-picker {
+      background: #0f172a; color: #38bdf8; border: 1px solid #38bdf8;
+      padding: 8px 14px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; cursor: pointer;
+    }
+    .mission-box { background: rgba(15, 23, 42, 0.85); border-left: 3px solid #f59e0b; padding: 12px 16px; font-size: 0.95rem; line-height: 1.45; }
+    .mission-obj { color: #34d399; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; margin-top: 6px; }
+    #codeEditor {
+      width: 100%; height: 170px; background: #030711; color: #fde047;
+      border: 1px solid #334155; border-radius: 4px; padding: 14px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.88rem; line-height: 1.55;
+      resize: none; outline: none; user-select: text;
+    }
+    .modal-btns { display: flex; gap: 10px; }
+    .m-btn { flex: 1; padding: 12px; font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 0.78rem; letter-spacing: 1.5px; cursor: pointer; border-radius: 4px; border: none; }
+    .btn-compile { background: linear-gradient(135deg, #0284c7, #10b981); color: #020617; }
+    .btn-hint { background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #fbbf24; flex: 0.45; }
+    .btn-exit { background: rgba(51, 65, 85, 0.6); color: #cbd5e1; flex: 0.35; }
+    #compilerOut { background: #02050b; border: 1px solid #1e293b; border-radius: 4px; padding: 10px 14px; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: #34d399; min-height: 52px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="vignette" class="vignette"></div>
+
+  <!-- 1. 3D GLTF STREAMING LOADER SCREEN -->
+  <div id="startScreen" class="start-screen">
+    <div class="engine-badge">REAL .GLB SKELETAL MESHES // DRACO 3D SUPERCAR // HDR PBR</div>
+    <div class="main-title">KAIRON</div>
+    <div class="sub-title">CORE 2099 // AAA GLTF ENGINE</div>
+    <div class="load-wrap"><div id="loadBar"></div></div>
+    <div id="loadStatus">STREAMING RIGGED 3D CHARACTER &amp; SUPERCAR MESHES...</div>
+    <button id="startBtn" class="btn-launch" disabled>LOADING 3D ASSETS...</button>
+  </div>
+
+  <!-- 1.5 ENDGAME VICTORY / DEFEAT SCREEN -->
+  <div id="endScreen" class="end-screen hidden">
+    <div class="engine-badge" id="endBadge">MISSION STATUS // SUCCESS</div>
+    <div class="main-title" id="endTitle" style="font-size:3.8rem; color:#34d399;">CORE RESTORED</div>
+    <div class="sub-title" id="endSubtitle">Neo-Metropolis Sector 2099 has been successfully purged of Glitch.</div>
+    <button id="restartBtn" class="btn-launch">RE-ENTER GRID ▶</button>
+  </div>
+
+  <!-- 2. CINEMATIC CUTSCENE -->
+  <div id="cineUI" class="cinematic-ui hidden">
+    <div class="cine-bar-top">
+      <span class="cine-tag" id="cineCamLabel">CAM_01 // NEO-METROPOLIS CENTRAL SPIRE [2099]</span>
+      <button id="skipBtn" class="btn-skip">SKIP INTRO [SPACE] ▶▶</button>
+    </div>
+    <div class="cine-bar-bot">
+      <div class="cine-tag" id="cineChapter">ACT I // THE CORE ARCHITECTURE</div>
+      <div class="cine-sub" id="cineSub">Establishing neural telemetry...</div>
+    </div>
+  </div>
+
+  <!-- 3. TACTICAL HUD -->
+  <div id="reticle" class="reticle hidden"></div>
+  <div class="floating-prompts">
+    <div id="carPrompt" class="prompt-pill hidden">🚘 PRESS [F] DRIVE / EXIT 3D CYBER-FERRARI</div>
+    <div id="hackPrompt" class="prompt-pill execute hidden">⚔️ BOSS STAGGERED! PRESS [E] FOR CODE EXECUTION STRIKE! ⚔️</div>
+    <div id="duelPrompt" class="prompt-pill duel hidden">🗡️ FINAL SHOWDOWN: ENGAGE GLITCH TITAN IN SWORD DUEL! [L-CLICK TO STRIKE] 🗡️</div>
+  </div>
+
+  <div id="gameHud" class="game-hud hidden">
+    <div class="hud-top">
+      <div class="boss-panel">
+        <div class="boss-name" id="bossName">SECTOR 01 // GLITCH TITAN &amp; DRONE LEGION</div>
+        <div class="boss-bar"><div id="bossHpFill"></div></div>
+        <div class="boss-sub" id="bossSub">L-Click: Leviathan Cleave | R-Click: Plasma Throw | [Q]: Core Rage Slam</div>
+      </div>
+
+      <div class="combo-box">
+        <div class="combo-num" id="comboNum">0x</div>
+        <div class="combo-label">COMBAT COMBO</div>
+      </div>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="left-cluster">
+        <div class="gta-radar">
+          <div id="radarKairon"></div>
+          <div id="radarCar"></div>
+          <div id="radarBoss"></div>
+        </div>
+
+        <div class="gow-bars">
+          <div class="kairon-title">
+            <span>KAIRON</span>
+            <span class="mode-tag" id="modeBadge">SKELETAL RIG ACTIVE</span>
+          </div>
+          <div class="bar-group">
+            <div class="b-label"><span>EXOSUIT INTEGRITY</span><span id="hpText">100%</span></div>
+            <div class="b-track"><div id="hpFill"></div></div>
+            <div class="b-label"><span>CORE OVERDRIVE [PRESS Q]</span><span>READY</span></div>
+            <div class="b-track"><div id="rageFill"></div></div>
+            <div class="b-label"><span>SECTORS RESTORED</span><span id="sectorCount">0 / 10</span></div>
+            <div class="b-track"><div id="coreFill"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-card">
+        <div><span class="k">MOUSE</span> Over-Shoulder Aim &nbsp;|&nbsp; <span class="k">L-CLICK</span> Cleave &nbsp;|&nbsp; <span class="k">R-CLICK</span> Plasma Throw</div>
+        <div><span class="k">Q</span> Core Rage &nbsp;|&nbsp; <span class="k">W</span><span class="k">A</span><span class="k">S</span><span class="k">D</span> Run / Drive &nbsp;|&nbsp; <span class="k">F</span> 3D Supercar &nbsp;|&nbsp; <span class="k">E</span> Code Terminal</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. MULTI-LANGUAGE CODING TERMINAL -->
+  <div id="codeModal" class="code-modal hidden">
+    <div class="modal-top">
+      <div>
+        <div style="color:#f59e0b; font-family:'JetBrains Mono',monospace; font-size:0.75rem; letter-spacing:2px;" id="modalSector">EXECUTION FINISHER // SECTOR 01 / 10</div>
+        <h2 id="modalTitle" style="font-family:'Orbitron',sans-serif; font-size:1.2rem; color:#fff; margin-top:2px;">Restore Sector Power</h2>
+      </div>
+      <select id="langSelect" class="lang-picker">
+        <option value="python">Python 3.12</option>
+        <option value="cpp">C++ (GCC 13)</option>
+        <option value="java">Java 21</option>
+        <option value="javascript">JavaScript (ES6)</option>
+      </select>
+    </div>
+
+    <div class="mission-box">
+      <div id="modalStory"></div>
+      <div class="mission-obj"><strong>EXECUTION CODE:</strong> <span id="modalTask"></span></div>
+    </div>
+
+    <textarea id="codeEditor" spellcheck="false"></textarea>
+
+    <div class="modal-btns">
+      <button id="hintBtn" class="m-btn btn-hint">DECRYPT HINT</button>
+      <button id="compileBtn" class="m-btn btn-compile">EXECUTE ORBITAL STRIKE ▶</button>
+      <button id="closeBtn" class="m-btn btn-exit">BACK [ESC]</button>
+    </div>
+
+    <div id="compilerOut">KAIRON Neural Executioner Ready. Write valid code to obliterate GLITCH Boss...</div>
+  </div>
+
+  <script>
+    // ==========================================
+    // 1. SYNTH AUDIO & VOICE ENGINE
+    // ==========================================
+    class AudioEngine {
+      constructor() { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      play(freq, type, dur, vol = 0.12) {
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+        o.type = type; o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        g.gain.setValueAtTime(vol, this.ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+        o.connect(g); g.connect(this.ctx.destination);
+        o.start(); o.stop(this.ctx.currentTime + dur);
+      }
+      slash() { this.play(190, 'sawtooth', 0.12, 0.16); setTimeout(() => this.play(95, 'triangle', 0.16, 0.2), 30); }
+      heavyHit() { this.play(80, 'sawtooth', 0.2, 0.26); setTimeout(() => this.play(55, 'square', 0.22, 0.22), 35); }
+      rageRoar() { [140, 110, 85, 60].forEach((f, i) => setTimeout(() => this.play(f, 'sawtooth', 0.4, 0.28), i * 50)); }
+      engine() { this.play(72, 'sawtooth', 0.12, 0.04); }
+      win() { [440, 554, 659, 880].forEach((f, i) => setTimeout(() => this.play(f, 'sine', 0.25, 0.14), i * 60)); }
+      narrate(text) {
+        if (!('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = 1.0; u.pitch = 0.76;
+        window.speechSynthesis.speak(u);
+      }
+    }
+    const sfx = new AudioEngine();
+
+    // ==========================================
+    // 2. 10 MISSIONS (PYTHON, C++, JAVA, JS)
+    // ==========================================
+    const MISSIONS = [
+      { id: 1, title: "Substation Reactor Boot", story: "GLITCH drained Sector 01's fusion grid. Set `power = 2099` to channel KAIRON's orbital strike.", task: "Set `power = 2099` and print/output its value.", hint: "power = 2099", starters: { python: "power = 0\nprint(power)", cpp: "#include <iostream>\nusing namespace std;\nint main() {\n  int power = 0;\n  cout << power;\n}", java: "public class Main {\n  public static void main(String[] args) {\n    int power = 0;\n    System.out.println(power);\n  }\n}", javascript: "let power = 0;\nconsole.log(power);" }, check: c => /power\s*=\s*2099/.test(c) && /(print|cout|System\.out|console\.log)/.test(c) },
+      { id: 2, title: "Magnetic Levitation Thrusters", story: "Multiply `thrust` (50) by `coils` (4) inside `lift`.", task: "Set `lift = 50 * 4` (or `200`) and output it.", hint: "lift = 50 * 4", starters: { python: "lift = 0 # 50 * 4\nprint(lift)", cpp: "int lift = 0; // 50 * 4\ncout << lift;", java: "int lift = 0; // 50 * 4\nSystem.out.println(lift);", javascript: "let lift = 0; // 50 * 4\nconsole.log(lift);" }, check: c => /(50\s*\*\s*4|200)/.test(c) && !/lift\s*=\s*0/.test(c) },
+      { id: 3, title: "Airspace Defense Perimeter", story: "Activate `\"SHIELD\"` if `altitude < 100`.", task: "Write an `if` statement checking `altitude < 100` and output `\"SHIELD\"`.", hint: "if (altitude < 100) output \"SHIELD\"", starters: { python: "altitude = 40\n", cpp: "int altitude = 40;\n", java: "int altitude = 40;\n", javascript: "let altitude = 40;\n" }, check: c => /if\s*\(?\s*altitude\s*<\s*100/.test(c) && /SHIELD/i.test(c) },
+      { id: 4, title: "Quantum Key Encryption", story: "Merge the split tokens `\"CORE\"` and `\"2099\"`.", task: "Concatenate `a + b` and output `\"CORE2099\"`.", hint: "print(a + b)", starters: { python: "a = \"CORE\"\nb = \"2099\"\n", cpp: "string a = \"CORE\", b = \"2099\";\n", java: "String a = \"CORE\", b = \"2099\";\n", javascript: "let a = \"CORE\", b = \"2099\";\n" }, check: c => /(a\s*\+\s*b|"CORE2099")/.test(c) },
+      { id: 5, title: "Orbital Array Calibration", story: "Cycle through 3 orbital targeting relays using a `for` loop.", task: "Write a `for` loop that iterates 3 times.", hint: "for i in range(3): print(i)", starters: { python: "# Loop 3 times\n", cpp: "// Loop 3 times\n", java: "// Loop 3 times\n", javascript: "// Loop 3 times\n" }, check: c => /for\s*(\(|i\s+in)/.test(c) && /3/.test(c) },
+      { id: 6, title: "EMP Surge Discharge", story: "Drain `charge` while `charge > 0`.", task: "Write a `while` loop checking `charge > 0` and decrementing `charge`.", hint: "while charge > 0: charge -= 1", starters: { python: "charge = 3\n", cpp: "int charge = 3;\n", java: "int charge = 3;\n", javascript: "let charge = 3;\n" }, check: c => /while\s*\(?\s*charge\s*>\s*0/.test(c) },
+      { id: 7, title: "Swarm Carrier Targeting", story: "Lock onto index `0` of `fleet` `[101, 202, 303]`.", task: "Access and output `fleet[0]`.", hint: "print(fleet[0])", starters: { python: "fleet = [101, 202, 303]\n", cpp: "int fleet[3] = {101, 202, 303};\n", java: "int[] fleet = {101, 202, 303};\n", javascript: "let fleet = [101, 202, 303];\n" }, check: c => /fleet\s*\[\s*0\s*\]/.test(c) },
+      { id: 8, title: "Autonomous Purge Subroutine", story: "Deploy a function named `purge()` that returns `\"CLEAN\"`.", task: "Define function `purge` returning `\"CLEAN\"`.", hint: "def purge(): return \"CLEAN\"", starters: { python: "# Define purge()\n", cpp: "string purge() {\n}", java: "static String purge() {\n}", javascript: "function purge() {\n}" }, check: c => /purge\s*\(/.test(c) && /return\s+["']CLEAN["']/.test(c) },
+      { id: 9, title: "Master Node Synchronization", story: "Update `status` from `\"OFFLINE\"` to `\"ONLINE\"`.", task: "Assign `\"ONLINE\"` to `status`.", hint: "status = \"ONLINE\"", starters: { python: "status = \"OFFLINE\"\n", cpp: "string status = \"OFFLINE\";\n", java: "String status = \"OFFLINE\";\n", javascript: "let status = \"OFFLINE\";\n" }, check: c => /ONLINE/.test(c) },
+      { id: 10, title: "The CORE Singularity", story: "FINAL DIRECTIVE: Set `override = true` and output `\"KAIRON VICTORY\"`!", task: "Set `override = True/true` and output `\"KAIRON VICTORY\"`.", hint: "override = True\nprint(\"KAIRON VICTORY\")", starters: { python: "override = False\n", cpp: "bool override = false;\n", java: "boolean override = false;\n", javascript: "let override = false;\n" }, check: c => /override\s*=\s*(True|true)/.test(c) && /KAIRON VICTORY/i.test(c) }
+    ];
+
+    // ==========================================
+    // 3. THREE.JS PBR SCENE & UNREAL BLOOM
+    // ==========================================
+    const canvas = document.getElementById("gameCanvas");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x030712);
+    scene.fog = new THREE.FogExp2(0x030712, 0.0045);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 900);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.shadowMap.enabled = true;
+
+    const composer = new THREE.EffectComposer(renderer);
+    composer.addPass(new THREE.RenderPass(scene, camera));
+    const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.1, 0.4, 0.25);
+    composer.addPass(bloomPass);
+
+    scene.add(new THREE.HemisphereLight(0x7dd3fc, 0x020617, 0.85));
+    const dirLight = new THREE.DirectionalLight(0xfffbeb, 1.8);
+    dirLight.position.set(60, 140, 80);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    // Load Real Studio HDRI Environment Map for Realistic Metallic Reflections
+    new THREE.RGBELoader()
+      .setPath('https://threejs.org/examples/textures/equirectangular/')
+      .load('royal_esplanade_1k.hdr', (texture) => {
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        scene.environment = texture;
+      });
+
+    // Procedural High-Res Skyscraper Glass & Wet Asphalt
+    function createGlassTex(corrupted) {
+      const c = document.createElement("canvas");
+      c.width = 512; c.height = 1024;
+      const ctx = c.getContext("2d");
+      ctx.fillStyle = "#040710"; ctx.fillRect(0, 0, 512, 1024);
+      for (let y = 12; y < 1000; y += 20) {
+        for (let x = 8; x < 500; x += 32) {
+          if (Math.random() > 0.55) {
+            ctx.fillStyle = corrupted ? (Math.random() > 0.35 ? "#e11d48" : "#f97316") : (Math.random() > 0.5 ? "#38bdf8" : "#fef3c7");
+            ctx.fillRect(x + 3, y, 22, 12);
+          }
+        }
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+    const cleanGlassTex = createGlassTex(false);
+    const glitchGlassTex = createGlassTex(true);
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(700, 700),
+      new THREE.MeshStandardMaterial({ color: 0x0b1220, roughness: 0.14, metalness: 0.82 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    const roadGrid = new THREE.GridHelper(700, 140, 0x38bdf8, 0x1e293b);
+    roadGrid.position.y = 0.04;
+    scene.add(roadGrid);
+
+    // Central CORE Megastructure
+    const coreTower = new THREE.Group();
+    coreTower.position.set(0, 0, -75);
+    const spireBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(4.5, 9, 85, 16),
+      new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.95, roughness: 0.12 })
+    );
+    spireBase.position.y = 42.5;
+    const coreNucleusMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true });
+    const coreNucleus = new THREE.Mesh(new THREE.IcosahedronGeometry(9.5, 2), coreNucleusMat);
+    coreNucleus.position.y = 95;
+    coreTower.add(spireBase, coreNucleus);
+    scene.add(coreTower);
+
+    const buildings = [];
+    for (let i = 0; i < 65; i++) {
+      const w = 10 + Math.random() * 14, h = 28 + Math.random() * 85, d = 10 + Math.random() * 14;
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b, roughness: 0.1, metalness: 0.9,
+        emissive: 0xffffff, emissiveMap: glitchGlassTex, emissiveIntensity: 0.95
+      });
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      let x = (Math.random() - 0.5) * 380, z = (Math.random() - 0.5) * 380;
+      if (Math.abs(x) < 38 && Math.abs(z) < 90) x += 60;
+      b.position.set(x, h / 2, z);
+      scene.add(b);
+      buildings.push(b);
+    }
+
+    // ==========================================
+    // 4. LOAD REAL RIGGED 3D CHARACTER (`Soldier.glb`) & REAL 3D SUPERCAR (`ferrari.glb`)
+    // ==========================================
+    const kairon = new THREE.Group();
+    scene.add(kairon);
+
+    const cyanBloom = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+    const goldBloom = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+    const rageBloom = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+
+    // Glowing Leviathan Cyber-Blade Slash Arc attached to KAIRON
+    const slashTrailMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0 });
+    const slashTrail = new THREE.Mesh(new THREE.RingGeometry(1.5, 3.4, 24, 1, 0, Math.PI), slashTrailMat);
+    slashTrail.rotation.x = Math.PI / 2;
+    slashTrail.position.set(0, 2.2, 0.5);
+    kairon.add(slashTrail);
+
+    let mixer = null;
+    const animActions = {};
+    let activeAction = null;
+
+    const techCar = new THREE.Group();
+    techCar.position.set(12, 0, -10);
+    scene.add(techCar);
+    const carWheels = [];
+
+    const gltfLoader = new THREE.GLTFLoader();
+    const dracoLoader = new THREE.DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.1/');
+    gltfLoader.setDRACOLoader(dracoLoader);
+
+    let assetsLoaded = 0;
+    function markAssetLoaded(msg) {
+      assetsLoaded++;
+      document.getElementById("loadBar").style.width = `${assetsLoaded * 50}%`;
+      document.getElementById("loadStatus").textContent = msg;
+      if (assetsLoaded >= 2) {
+        const btn = document.getElementById("startBtn");
+        btn.disabled = false;
+        btn.textContent = "UNLEASH KAIRON (3D ENGINE READY) ▶";
+      }
+    }
+
+    // A) Load Real Articulated Humanoid 3D Mesh + Skeletal Animations (Idle, Walk, Run)
+    gltfLoader.load(
+      'https://threejs.org/examples/models/gltf/Soldier.glb',
+      (gltf) => {
+        const model = gltf.scene;
+        model.scale.set(2.35, 2.35, 2.35);
+        model.rotation.y = Math.PI;
+
+        model.traverse((obj) => {
+          if (obj.isMesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+            if (obj.material) {
+              obj.material.metalness = 0.75;
+              obj.material.roughness = 0.22;
+            }
+          }
+        });
+
+        kairon.add(model);
+
+        mixer = new THREE.AnimationMixer(model);
+        gltf.animations.forEach((clip) => {
+          animActions[clip.name] = mixer.clipAction(clip);
+        });
+        if (animActions['Idle']) {
+          activeAction = animActions['Idle'];
+          activeAction.play();
+        }
+        markAssetLoaded("RIGGED 3D CHARACTER LOADED // STREAMING 3D SUPERCAR...");
+      },
+      undefined,
+      () => markAssetLoaded("CHARACTER FALLBACK ACTIVE")
+    );
+
+    function fadeToAction(name, duration = 0.18) {
+      if (!animActions[name] || activeAction === animActions[name]) return;
+      const prev = activeAction;
+      activeAction = animActions[name];
+      if (prev) prev.fadeOut(duration);
+      activeAction.reset().fadeIn(duration).play();
+    }
+
+    // B) Load Real Sculpted 3D Ferrari Supercar Mesh (`ferrari.glb`)
+    gltfLoader.load(
+      'https://threejs.org/examples/models/gltf/ferrari.glb',
+      (gltf) => {
+        const carModel = gltf.scene;
+        carModel.scale.set(1.65, 1.65, 1.65);
+        carModel.traverse((obj) => {
+          if (obj.isMesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          }
+        });
+        const wNames = ['wheel_fl', 'wheel_fr', 'wheel_rl', 'wheel_rr'];
+        wNames.forEach(n => {
+          const w = carModel.getObjectByName(n);
+          if (w) carWheels.push(w);
+        });
+        techCar.add(carModel);
+        markAssetLoaded("ALL 3D GLTF & DRACO ASSETS READY!");
+      },
+      undefined,
+      () => markAssetLoaded("ALL 3D ASSETS READY!")
+    );
+
+    // ==========================================
+    // 5. GLITCH BOSS & DRONE LEGION
+    // ==========================================
+    const glitchBoss = new THREE.Group();
+    glitchBoss.position.set(0, 5.2, -32);
+    const bossCore = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(2.4, 2),
+      new THREE.MeshStandardMaterial({ color: 0x111827, emissive: 0xe11d48, emissiveIntensity: 1.6, roughness: 0.1, metalness: 0.9 })
+    );
+    const gyroRing1 = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.1, 16, 64), rageBloom);
+    const gyroRing2 = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.08, 16, 64), goldBloom);
+    gyroRing2.rotation.x = Math.PI / 3;
+    const staggerRing = new THREE.Mesh(new THREE.RingGeometry(4.8, 5.5, 32), new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide }));
+    staggerRing.rotation.x = -Math.PI / 2;
+    staggerRing.position.y = -4.9;
+    glitchBoss.add(bossCore, gyroRing1, gyroRing2, staggerRing);
+    scene.add(glitchBoss);
+
+    const drones = [];
+    for (let i = 0; i < 5; i++) {
+      const d = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.95, 1),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.95, roughness: 0.1 })
+      );
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.48, 12, 12), rageBloom);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.05, 8, 24), goldBloom);
+      ring.rotation.x = Math.PI / 2;
+      d.add(body, core, ring);
+      d.position.set((Math.random() - 0.5) * 35, 2.2, -15 - Math.random() * 25);
+      scene.add(d);
+      drones.push(d);
+    }
+
+    const rageWaveMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, side: THREE.DoubleSide, transparent: true, opacity: 0 });
+    const rageWave = new THREE.Mesh(new THREE.RingGeometry(1, 2.5, 32), rageWaveMat);
+    rageWave.rotation.x = -Math.PI / 2;
+    rageWave.position.y = 0.25;
+    scene.add(rageWave);
+
+    const orbitalBeam = new THREE.Mesh(
+      new THREE.CylinderGeometry(3.5, 3.5, 160, 24),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0 })
+    );
+    scene.add(orbitalBeam);
+
+    // ==========================================
+    // 6. CINEMATIC STORY INTRO DIRECTOR
+    // ==========================================
+    let state = "START", cineStart = 0, act = 0;
+    const cineChapter = document.getElementById("cineChapter");
+    const cineSub = document.getElementById("cineSub");
+    const cineCamLabel = document.getElementById("cineCamLabel");
+
+    function beginCutscene() {
+      document.getElementById("startScreen").classList.add("hidden");
+      document.getElementById("cineUI").classList.remove("hidden");
+      state = "CINEMATIC";
+      cineStart = clock.getElapsedTime();
+      act = 0;
+      buildings.forEach(b => b.material.emissiveMap = cleanGlassTex);
+      glitchBoss.visible = false;
+      drones.forEach(d => d.visible = false);
+      kairon.position.set(0, 50, 0);
+    }
+
+    function startGameplay() {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      state = "PLAY";
+      document.getElementById("cineUI").classList.add("hidden");
+      document.getElementById("gameHud").classList.remove("hidden");
+      document.getElementById("reticle").classList.remove("hidden");
+
+      coreNucleusMat.color.setHex(0xf43f5e);
+      buildings.forEach((b, idx) => b.material.emissiveMap = idx < currentMission * 6 ? cleanGlassTex : glitchGlassTex);
+      kairon.position.set(0, 0, 0);
+      glitchBoss.visible = true;
+      drones.forEach(d => d.visible = true);
+      sfx.win();
+    }
+
+    document.getElementById("startBtn").addEventListener("click", beginCutscene);
+    document.getElementById("skipBtn").addEventListener("click", startGameplay);
+    document.getElementById("restartBtn").addEventListener("click", () => location.reload());
+
+    // ==========================================
+    // 7. LOCOMOTION, COMBAT & FINAL SWORD DUEL
+    // ==========================================
+    const keys = {};
+    let inCar = false, currentMission = 0, bossHP = 100, playerHP = 100;
+    let yVel = 0, grounded = true, modalOpen = false, laserTimer = 0;
+    let camYaw = 0, camPitch = 0.16;
+    let swingAnim = 0, comboCount = 0, shakeIntensity = 0, rageWaveTimer = 0, rageModeTimer = 0;
+    let inBossDuel = false, bossDuelHP = 100, duelTimer = 0;
+    const projectiles = [], sparks = [];
+
+    canvas.addEventListener("click", () => {
+      if (state === "PLAY" && !modalOpen && document.pointerLockElement !== canvas) {
+        canvas.requestPointerLock();
+      }
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (document.pointerLockElement === canvas && state === "PLAY" && !modalOpen) {
+        camYaw -= e.movementX * 0.003;
+        camPitch = Math.max(-0.2, Math.min(0.6, camPitch + e.movementY * 0.0025));
+      }
+    });
+
+    window.addEventListener("keydown", (e) => {
+      keys[e.code] = true;
+      if (e.code === "Space" && state === "CINEMATIC") { startGameplay(); return; }
+      if (state !== "PLAY" || modalOpen) {
+        if (e.code === "Escape" && modalOpen) closeCodeModal();
+        return;
+      }
+      if (e.code === "KeyF") {
+        if (inCar) {
+          inCar = false;
+          kairon.visible = true;
+          kairon.position.copy(techCar.position).add(new THREE.Vector3(3.8, 0, 0));
+          document.getElementById("modeBadge").textContent = "SKELETAL RIG ACTIVE";
+        } else if (kairon.position.distanceTo(techCar.position) < 10) {
+          inCar = true;
+          kairon.visible = false;
+          document.getElementById("modeBadge").textContent = "DRIVING 3D FERRARI";
+          sfx.win();
+        }
+      }
+      if (e.code === "KeyQ" && !inCar && !inBossDuel) {
+        sfx.rageRoar();
+        rageModeTimer = 8.0;
+        rageWaveTimer = 1.0;
+        rageWave.position.set(kairon.position.x, 0.3, kairon.position.z);
+        shakeIntensity = 0.85;
+        document.getElementById("vignette").classList.add("rage");
+        slashTrailMat.color.setHex(0xf59e0b);
+
+        drones.forEach(d => {
+          if (d.position.distanceTo(kairon.position) < 22) {
+            burst(d.position, 0xf59e0b, 20);
+            d.position.add(d.position.clone().sub(kairon.position).normalize().multiplyScalar(14));
+            incrementCombo(3);
+          }
+        });
+        if (glitchBoss.position.distanceTo(kairon.position) < 28 && !inBossDuel) {
+          damageBoss(18);
+          burst(glitchBoss.position, 0xf59e0b, 35);
+        }
+      }
+      if (e.code === "KeyE") {
+        const activePos = inCar ? techCar.position : kairon.position;
+        if ((activePos.distanceTo(glitchBoss.position) < 24 || bossHP <= 50) && !inBossDuel && currentMission < 10) {
+          if (document.pointerLockElement) document.exitPointerLock();
+          openCodeModal();
+        }
+      }
+    });
+    window.addEventListener("keyup", (e) => keys[e.code] = false);
+
+    window.addEventListener("contextmenu", e => e.preventDefault());
+    window.addEventListener("mousedown", (e) => {
+      if (state !== "PLAY" || modalOpen || ["BUTTON", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
+
+      if (e.button === 0 && !inCar) {
+        sfx.slash();
+        swingAnim = 1.0;
+        slashTrailMat.opacity = 0.95;
+        slashTrail.rotation.z = (comboCount % 2 === 0) ? 0 : Math.PI;
+
+        kairon.position.x -= Math.sin(kairon.rotation.y) * 1.1;
+        kairon.position.z -= Math.cos(kairon.rotation.y) * 1.1;
+
+        if (inBossDuel) {
+          // Boss Sword Fight Hit Logic
+          const dist = kairon.position.distanceTo(glitchBoss.position);
+          if (dist < 10) {
+            sfx.heavyHit();
+            shakeIntensity = 0.7;
+            bossDuelHP -= 15;
+            document.getElementById("bossHpFill").style.width = `${Math.max(0, bossDuelHP)}%`;
+            burst(glitchBoss.position, 0xf43f5e, 25);
+            incrementCombo(3);
+            if (bossDuelHP <= 0) triggerVictory();
+          }
+        } else {
+          drones.forEach(d => {
+            if (d.position.distanceTo(kairon.position) < 8.5) {
+              sfx.heavyHit();
+              shakeIntensity = 0.45;
+              burst(d.position, 0x38bdf8, 18);
+              d.position.add(d.position.clone().sub(kairon.position).normalize().multiplyScalar(12));
+              incrementCombo(1);
+              damageBoss(6);
+            }
+          });
+
+          if (glitchBoss.position.distanceTo(kairon.position) < 12) {
+            sfx.heavyHit();
+            shakeIntensity = 0.55;
+            burst(glitchBoss.position, 0xf59e0b, 25);
+            incrementCombo(2);
+            damageBoss(12);
+          }
+        }
+      } else if (!inBossDuel) {
+        sfx.slash();
+        const shooter = inCar ? techCar : kairon;
+        const proj = new THREE.Mesh(
+          new THREE.TorusGeometry(0.65, 0.12, 8, 20),
+          rageModeTimer > 0 ? goldBloom : cyanBloom
+        );
+        proj.rotation.x = Math.PI / 2;
+        proj.position.copy(shooter.position).add(new THREE.Vector3(0, 2.2, 0));
+        const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), shooter.rotation.y);
+        const toBoss = glitchBoss.position.clone().sub(proj.position).normalize();
+        proj.userData.vel = (forward.dot(toBoss) > 0.5 ? toBoss : forward).multiplyScalar(1.85);
+        proj.userData.life = 80;
+        scene.add(proj);
+        projectiles.push(proj);
+      }
+    });
+
+    function incrementCombo(amt) {
+      comboCount += amt;
+      document.getElementById("comboNum").textContent = `${comboCount}x`;
+    }
+
+    function damageBoss(amt) {
+      if (inBossDuel) return;
+      bossHP = Math.max(10, bossHP - amt);
+      document.getElementById("bossHpFill").style.width = `${bossHP}%`;
+      if (bossHP <= 50) {
+        document.getElementById("bossSub").textContent = "⚔️ BOSS STAGGERED! PRESS [E] TO TRIGGER CODE EXECUTION FINISHER! ⚔️";
+      }
+    }
+
+    function startBossDuel() {
+      inBossDuel = true;
+      bossDuelHP = 100;
+      kairon.position.set(0, 0, -20);
+      glitchBoss.position.set(0, 5.2, -30);
+      document.getElementById("bossName").textContent = "FINAL SHOWDOWN // GLITCH TITAN DUEL";
+      document.getElementById("bossHpFill").style.width = "100%";
+      document.getElementById("bossSub").textContent = "SWORD FIGHT: L-CLICK TO SLASH, PARRY GLITCH ATTACKS!";
+      document.getElementById("duelPrompt").classList.remove("hidden");
+    }
+
+    function triggerVictory() {
+      state = "VICTORY";
+      if (document.pointerLockElement) document.exitPointerLock();
+      document.getElementById("gameHud").classList.add("hidden");
+      document.getElementById("reticle").classList.add("hidden");
+      document.getElementById("duelPrompt").classList.add("hidden");
+      document.getElementById("endBadge").textContent = "MISSION STATUS // SUCCESS";
+      document.getElementById("endTitle").textContent = "CORE 2099 SAVED";
+      document.getElementById("endSubtitle").textContent = `All 10 sectors purified and Glitch Titan defeated in epic sword combat. Total Combo: ${comboCount}x`;
+      document.getElementById("endScreen").classList.remove("hidden");
+      sfx.win();
+    }
+
+    function triggerGameOver() {
+      state = "GAMEOVER";
+      if (document.pointerLockElement) document.exitPointerLock();
+      document.getElementById("gameHud").classList.add("hidden");
+      document.getElementById("reticle").classList.add("hidden");
+      document.getElementById("duelPrompt").classList.add("hidden");
+      document.getElementById("endBadge").textContent = "MISSION STATUS // FAILURE";
+      document.getElementById("endTitle").textContent = "EXOSUIT DESTROYED";
+      document.getElementById("endTitle").style.color = "#f43f5e";
+      document.getElementById("endSubtitle").textContent = "Kairon's neural link collapsed under Glitch Titan's assault.";
+      document.getElementById("endScreen").classList.remove("hidden");
+      sfx.heavyHit();
+    }
+
+    function burst(pos, color, count = 20) {
+      for (let i = 0; i < count; i++) {
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 0.32), new THREE.MeshBasicMaterial({ color }));
+        p.position.copy(pos);
+        p.userData.vel = new THREE.Vector3((Math.random() - 0.5) * 1.5, Math.random() * 1.3, (Math.random() - 0.5) * 1.5);
+        p.userData.life = 35;
+        scene.add(p);
+        sparks.push(p);
+      }
+    }
+
+    // ==========================================
+    // 8. MAIN RENDER & SKELETAL ANIMATION LOOP
+    // ==========================================
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      const t = clock.getElapsedTime();
+
+      if (mixer) mixer.update(delta);
+      coreNucleus.rotation.y += 0.015;
+
+      // --- CINEMATIC CUTSCENE ---
+      if (state === "CINEMATIC") {
+        const ct = t - cineStart;
+        if (ct < 6.0) {
+          if (act !== 1) {
+            act = 1;
+            cineCamLabel.textContent = "CAM_01 // NEO-METROPOLIS SKYLINE [2099]";
+            cineChapter.textContent = "ACT I // THE CORE NETWORK";
+            const msg = "Year 2099. Global infrastructure and synthetic life operate under a single quantum processor: CORE.";
+            cineSub.textContent = msg; sfx.narrate(msg);
+          }
+          camera.position.set(Math.sin(ct * 0.3) * 85, 45, Math.cos(ct * 0.3) * 85);
+          camera.lookAt(0, 28, -50);
+        } else if (ct < 12.0) {
+          if (act !== 2) {
+            act = 2;
+            cineCamLabel.textContent = "CAM_02 // CENTRAL SPIRE OVERCLOCK";
+            cineChapter.textContent = "ACT II // THE EXPERIMENT";
+            const msg = "An experimental overclock shattered the CORE matrix, birthing a ruthless digital warlord: GLITCH.";
+            cineSub.textContent = msg; sfx.narrate(msg);
+          }
+          camera.position.set(0, 92, -12 - (ct - 6.0) * 4);
+          camera.lookAt(0, 95, -75);
+        } else if (ct < 18.0) {
+          if (act !== 3) {
+            act = 3;
+            cineCamLabel.textContent = "ALERT // LEGION DEPLOYED";
+            cineChapter.textContent = "ACT III // WRATH OF GLITCH";
+            const msg = "GLITCH unleashed its drone legions, corrupting every sector in the metropolis.";
+            cineSub.textContent = msg; sfx.narrate(msg); sfx.rageRoar();
+            coreNucleusMat.color.setHex(0xf43f5e);
+            buildings.forEach(b => b.material.emissiveMap = glitchGlassTex);
+            glitchBoss.visible = true;
+            drones.forEach(d => d.visible = true);
+            burst(new THREE.Vector3(0, 92, -75), 0xf43f5e, 60);
+          }
+          camera.position.set(Math.sin(t * 22) * 0.4, 15, -14);
+          camera.lookAt(glitchBoss.position);
+        } else if (ct < 24.0) {
+          if (act !== 4) {
+            act = 4;
+            cineCamLabel.textContent = "DEPLOYMENT // KAIRON UNLEASHED";
+            cineChapter.textContent = "ACT IV // ENTER KAIRON";
+            const msg = "Now, KAIRON enters the streets. Fight the swarm, drive the V-99 Supercar, and rewrite the code!";
+            cineSub.textContent = msg; sfx.narrate(msg); sfx.win();
+          }
+          const drop = Math.min(1, (ct - 18.0) / 1.8);
+          kairon.position.set(0, (1 - drop) * 45, 0);
+          camera.position.set(3.5, 3.2, 6.5);
+          camera.lookAt(kairon.position.clone().add(new THREE.Vector3(0, 2.2, 0)));
+        } else {
+          startGameplay();
+        }
+      }
+
+      // --- ACTIVE GAMEPLAY ---
+      if (state === "PLAY" && !modalOpen) {
+        const activeObj = inCar ? techCar : kairon;
+        const sprinting = keys["ShiftLeft"] || keys["ShiftRight"];
+        const baseSpeed = inCar ? 0.78 : (rageModeTimer > 0 ? 0.42 : 0.28);
+        const moveSpeed = sprinting ? baseSpeed * 1.65 : baseSpeed;
+        let moving = false;
+
+        if (!inCar) kairon.rotation.y = camYaw;
+
+        if (keys["KeyW"] || keys["ArrowUp"]) {
+          activeObj.position.x -= Math.sin(activeObj.rotation.y) * moveSpeed;
+          activeObj.position.z -= Math.cos(activeObj.rotation.y) * moveSpeed;
+          moving = true;
+          if (inCar) {
+            carWheels.forEach(w => w.rotation.x -= 0.25);
+            if (Math.random() < 0.25) sfx.engine();
+          }
+        }
+        if (keys["KeyS"] || keys["ArrowDown"]) {
+          activeObj.position.x += Math.sin(activeObj.rotation.y) * moveSpeed;
+          activeObj.position.z += Math.cos(activeObj.rotation.y) * moveSpeed;
+          moving = true;
+        }
+        if (keys["KeyA"] || keys["ArrowLeft"]) {
+          if (inCar) activeObj.rotation.y += 0.048;
+          else {
+            activeObj.position.x -= Math.cos(activeObj.rotation.y) * moveSpeed * 0.85;
+            activeObj.position.z += Math.sin(activeObj.rotation.y) * moveSpeed * 0.85;
+          }
+          moving = true;
+        }
+        if (keys["KeyD"] || keys["ArrowRight"]) {
+          if (inCar) activeObj.rotation.y -= 0.048;
+          else {
+            activeObj.position.x += Math.cos(activeObj.rotation.y) * moveSpeed * 0.85;
+            activeObj.position.z -= Math.sin(activeObj.rotation.y) * moveSpeed * 0.85;
+          }
+          moving = true;
+        }
+
+        // Blend Skeletal Animations
+        if (!inCar) {
+          if (moving) {
+            fadeToAction(sprinting ? 'Run' : 'Walk', 0.15);
+          } else {
+            fadeToAction('Idle', 0.2);
+          }
+
+          if (keys["Space"] && grounded) { yVel = 0.45; grounded = false; }
+          kairon.position.y += yVel;
+          if (kairon.position.y > 0) yVel -= 0.024;
+          else { kairon.position.y = 0; yVel = 0; grounded = true; }
+
+          if (swingAnim > 0) {
+            swingAnim -= 0.08;
+            slashTrailMat.opacity = swingAnim;
+          } else {
+            slashTrailMat.opacity = 0;
+          }
+        } else {
+          kairon.position.copy(techCar.position);
+          camYaw = techCar.rotation.y;
+        }
+
+        if (rageModeTimer > 0) {
+          rageModeTimer -= 0.016;
+          if (rageModeTimer <= 0) {
+            document.getElementById("vignette").classList.remove("rage");
+            slashTrailMat.color.setHex(0x38bdf8);
+          }
+        }
+        if (rageWaveTimer > 0) {
+          rageWaveTimer -= 0.03;
+          const s = (1 - rageWaveTimer) * 14;
+          rageWave.scale.set(s, s, 1);
+          rageWaveMat.opacity = rageWaveTimer;
+        }
+
+        // Boss Duel AI Attacks
+        if (inBossDuel) {
+          const toKairon = kairon.position.clone().sub(glitchBoss.position);
+          toKairon.y = 0;
+          if (toKairon.length() > 6) {
+            glitchBoss.position.add(toKairon.normalize().multiplyScalar(0.08));
+          } else if (Math.random() < 0.03) {
+            // Boss attacks player
+            playerHP = Math.max(0, playerHP - 8);
+            document.getElementById("hpFill").style.width = `${playerHP}%`;
+            document.getElementById("hpText").textContent = `${playerHP}%`;
+            shakeIntensity = 0.6;
+            sfx.heavyHit();
+            document.getElementById("vignette").classList.add("danger");
+            setTimeout(() => document.getElementById("vignette").classList.remove("danger"), 300);
+            if (playerHP <= 0) triggerGameOver();
+          }
+        }
+
+        // Over-the-Shoulder Camera
+        const shoulderOffset = inCar
+          ? new THREE.Vector3(0, 4.2, 11.5)
+          : new THREE.Vector3(1.15, 3.4 + camPitch * 3.0, 5.5);
+        shoulderOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), activeObj.rotation.y);
+
+        const targetCam = activeObj.position.clone().add(shoulderOffset);
+        if (shakeIntensity > 0) {
+          targetCam.x += (Math.random() - 0.5) * shakeIntensity;
+          targetCam.y += (Math.random() - 0.5) * shakeIntensity;
+          shakeIntensity *= 0.85;
+        }
+        camera.position.lerp(targetCam, 0.22);
+
+        const lookTarget = activeObj.position.clone().add(
+          new THREE.Vector3(0, 2.4 - camPitch * 2.2, -12).applyAxisAngle(new THREE.Vector3(0, 1, 0), activeObj.rotation.y)
+        );
+        camera.lookAt(lookTarget);
+
+        drones.forEach((d, idx) => {
+          const toPlayer = activeObj.position.clone().sub(d.position);
+          toPlayer.y = 0;
+          if (toPlayer.length() > 3.2) d.position.add(toPlayer.normalize().multiplyScalar(0.11));
+          d.position.y = 2.2 + Math.sin(t * 4 + idx) * 0.4;
+          d.rotation.y += 0.06;
+        });
+
+        gyroRing1.rotation.y += 0.04;
+        gyroRing2.rotation.z -= 0.03;
+        staggerRing.rotation.z += 0.03;
+        glitchBoss.position.y = 5.2 + Math.sin(t * 2.5) * 0.5;
+
+        const distCar = kairon.position.distanceTo(techCar.position);
+        document.getElementById("carPrompt").classList.toggle("hidden", inCar || distCar >= 10 || inBossDuel);
+
+        const distBoss = activeObj.position.distanceTo(glitchBoss.position);
+        document.getElementById("hackPrompt").classList.toggle("hidden", inBossDuel || !(distBoss < 24 || bossHP <= 50));
+
+        const mapScale = 0.55;
+        const bx = (glitchBoss.position.x - activeObj.position.x) * mapScale;
+        const bz = (glitchBoss.position.z - activeObj.position.z) * mapScale;
+        document.getElementById("radarBoss").style.left = `${Math.max(12, Math.min(142, 77 + bx))}px`;
+        document.getElementById("radarBoss").style.top = `${Math.max(12, Math.min(142, 77 + bz))}px`;
+
+        const cx = (techCar.position.x - activeObj.position.x) * mapScale;
+        const cz = (techCar.position.z - activeObj.position.z) * mapScale;
+        document.getElementById("radarCar").style.left = `${Math.max(12, Math.min(142, 77 + cx))}px`;
+        document.getElementById("radarCar").style.top = `${Math.max(12, Math.min(142, 77 + cz))}px`;
+      }
+
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i]; p.position.add(p.userData.vel); p.rotation.z += 0.25; p.userData.life--;
+        let hit = false;
+        drones.forEach(d => {
+          if (p.position.distanceTo(d.position) < 2.2) {
+            sfx.heavyHit(); burst(d.position, 0x38bdf8, 15);
+            d.position.add(p.userData.vel.clone().multiplyScalar(6));
+            incrementCombo(1); damageBoss(5); hit = true;
+          }
+        });
+        if (p.position.distanceTo(glitchBoss.position) < 4.2 && !inBossDuel) {
+          sfx.heavyHit(); burst(p.position, 0xf59e0b, 18);
+          incrementCombo(2); damageBoss(9); hit = true;
+        }
+        if (hit || p.userData.life <= 0) { scene.remove(p); projectiles.splice(i, 1); }
+      }
+
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const p = sparks[i]; p.position.add(p.userData.vel); p.userData.life--; p.scale.multiplyScalar(0.91);
+        if (p.userData.life <= 0) { scene.remove(p); sparks.splice(i, 1); }
+      }
+
+      if (laserTimer > 0) { laserTimer -= 0.022; orbitalBeam.material.opacity = laserTimer; }
+
+      composer.render();
+    }
+    animate();
+
+    // ==========================================
+    // 9. MULTI-LANGUAGE CODE EXECUTION MODAL
+    // ==========================================
+    const codeModal = document.getElementById("codeModal");
+    const langSelect = document.getElementById("langSelect");
+    const codeEditor = document.getElementById("codeEditor");
+    const compilerOut = document.getElementById("compilerOut");
+
+    function openCodeModal() {
+      if (currentMission >= MISSIONS.length) return;
+      modalOpen = true;
+      const m = MISSIONS[currentMission];
+      document.getElementById("modalSector").textContent = `EXECUTION FINISHER // SECTOR 0${m.id} / 10`;
+      document.getElementById("modalTitle").textContent = m.title;
+      document.getElementById("modalStory").textContent = m.story;
+      document.getElementById("modalTask").textContent = m.task;
+      codeEditor.value = m.starters[langSelect.value];
+      codeModal.classList.remove("hidden");
+      codeEditor.focus();
+    }
+
+    function closeCodeModal() { modalOpen = false; codeModal.classList.add("hidden"); }
+    langSelect.addEventListener("change", () => codeEditor.value = MISSIONS[currentMission].starters[langSelect.value]);
+    document.getElementById("closeBtn").addEventListener("click", closeCodeModal);
+    document.getElementById("hintBtn").addEventListener("click", () => {
+      compilerOut.style.color = "#fbbf24";
+      compilerOut.textContent = `[KAIRON TELEMETRY HINT]: ${MISSIONS[currentMission].hint}`;
+    });
+
+    document.getElementById("compileBtn").addEventListener("click", () => {
+      const m = MISSIONS[currentMission];
+      if (m.check(codeEditor.value)) {
+        sfx.win(); sfx.rageRoar();
+        closeCodeModal();
+
+        orbitalBeam.position.set(glitchBoss.position.x, 80, glitchBoss.position.z);
+        laserTimer = 1.0;
+        shakeIntensity = 1.2;
+        burst(glitchBoss.position, 0x38bdf8, 65);
+        burst(glitchBoss.position, 0xf59e0b, 45);
+
+        buildings.slice(currentMission * 6, (currentMission + 1) * 6).forEach(b => {
+          b.material.emissiveMap = cleanGlassTex;
+          b.material.needsUpdate = true;
+        });
+
+        currentMission++;
+        document.getElementById("sectorCount").textContent = `${currentMission} / 10`;
+        document.getElementById("coreFill").style.width = `${currentMission * 10}%`;
+
+        if (currentMission < MISSIONS.length) {
+          const angle = currentMission * 1.35;
+          glitchBoss.position.set(Math.sin(angle) * 65, 5.2, Math.cos(angle) * 65);
+          bossHP = 100;
+          document.getElementById("bossHpFill").style.width = "100%";
+          document.getElementById("bossName").textContent = `SECTOR 0${currentMission + 1} // GLITCH TITAN & DRONE LEGION`;
+          document.getElementById("bossSub").textContent = "Next Sector Unlocked! Drive your 3D Ferrari [F] to the Next Anomaly!";
+        } else {
+          // All 10 missions completed -> trigger Boss Sword Duel
+          drones.forEach(d => d.visible = false);
+          coreNucleusMat.color.setHex(0x10b981);
+          startBossDuel();
+        }
+      } else {
+        compilerOut.style.color = "#f43f5e";
+        compilerOut.textContent = "[EXECUTION FAILED] >> Code output mismatch. Check directive or click DECRYPT HINT.";
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
